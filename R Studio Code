@@ -1,0 +1,265 @@
+#################################################################################
+
+Swift <- read_csv("taylor_swift_genius_data.csv")
+MusicData <- read_csv("taylor_swift_spotify_data.csv")
+stopwords <- get_stopwords()
+word_sentiments <- get_sentiments("bing")
+
+Swift <- Swift %>% 
+  filter(Album %in% c("Speak Now", "Red")) %>%
+  unnest_tokens(word, Lyrics) 
+
+FilterSwift <- Swift %>%
+  filter(!word %in% stop_words$word) %>%
+  inner_join(word_sentiments, by = "word") %>%
+  group_by(Album, sentiment) %>%
+  summarise(N = n()) %>%
+  group_by(Album) %>%
+  mutate(Prop = N/sum(N))
+
+MusicData <- MusicData %>%
+  filter(Album %in% c("Speak Now", "Red"))
+
+PositiveProp <- Swift %>%
+  inner_join(word_sentiments, by = "word") %>%
+  group_by(Album, `Song Name`) %>%
+  summarise(
+    PositiveCount = sum(sentiment == "positive"),
+    TotalCount = n()
+  ) %>%
+  ungroup() %>%
+  mutate(
+    PositiveProp = PositiveCount / TotalCount,
+    `Song Name` = str_to_title(`Song Name`)
+  ) %>%
+  select(Album, `Song Name`, PositiveProp)
+
+
+RedWords <- Swift %>%
+  filter(Album == "Red") %>%
+  filter(!word %in% stop_words$word) %>%
+  group_by(word) %>%
+  summarise(N = n())  %>%
+  mutate(Album = "Red") %>%
+  inner_join(word_sentiments, by = "word") %>%
+  arrange(desc(N))
+
+SpeakNowWords <- Swift %>%
+  filter(Album == "Speak Now") %>%
+  filter(!word %in% stop_words$word) %>%
+  group_by(word) %>%
+  summarise(N = n())  %>%
+  mutate(Album = "Speak Now") %>%
+  inner_join(word_sentiments, by = "word") %>%
+  arrange(desc(N))
+
+SpeakNowCloud <- ggplot(SpeakNowWords, aes(label = word, size = N, color = sentiment)) +
+  geom_text_wordcloud() + 
+  scale_size_area(max_size = 8) +
+  scale_color_manual(values = c("positive" = "green3", "negative" = "red2")) +
+  theme_minimal() + 
+  labs(title = "Speak Now") +
+  theme(plot.title = element_text(hjust = 0.5))
+
+RedCloud <- ggplot(RedWords, aes(label = word, size = N, color = sentiment)) +
+  geom_text_wordcloud() + 
+  scale_size_area(max_size = 12) +
+  scale_color_manual(values = c("positive" = "green3", "negative" = "red2")) +
+  theme_minimal() +
+  labs(title = "Red") +
+  theme(plot.title = element_text(hjust = 0.5))
+
+
+FinalMusicData <- MusicData %>%
+  full_join(PositiveProp) %>%
+  select(`Song Name`, Album, PositiveProp, Danceability, Tempo, Energy, Valence)
+
+RedDance <- ggplot(FinalMusicData %>% filter(Album == "Red")) +
+  geom_point(aes(x = PositiveProp, y = Danceability), color = "red4") +
+  scale_x_continuous(
+    breaks = c(0, 0.25, 0.5, 0.75, 1),
+    labels = c("0%", "25%", "50%", "75%", "100%"),
+    limits = c(0, 1)
+  ) +
+  scale_y_continuous(
+    breaks = c(0, 0.25, 0.5, 0.75, 1),
+    labels = c("0%", "25%", "50%", "75%", "100%"),
+    limits = c(0, 1)
+  ) +
+  theme_minimal() +
+  labs(x = "Percentage of Positive Lyrics", y = "Percent Danceable", 
+       title = "Positive Sentiment vs Danceability", subtitle = "Each Song in Red") +
+  theme(plot.title = element_text(hjust = 0.5), plot.subtitle = element_text(hjust = 0.5))
+
+
+SpeakNowDance <- ggplot(FinalMusicData %>% filter(Album == "Speak Now")) +
+  geom_point(aes(x = PositiveProp, y = Danceability), color = "blue") +
+  scale_x_continuous(breaks = c(0, 0.25, 0.5, 0.75, 1), 
+                     labels = c("0%", "25%", "50%", "75%", "100%"), 
+                     limits = c(0, 1)) +
+  scale_y_continuous(breaks = c(0, 0.25, 0.5, 0.75, 1), 
+                     labels = c("0%", "25%", "50%", "75%", "100%"), 
+                     limits = c(0, 1)) +
+  theme_minimal() +
+  labs(x = "Percentage of Positive Lyrics", y = "Percent Danceable", 
+       title = "Positive Sentiment vs Danceability", subtitle = "Each Song in Speak Now") +
+  theme(plot.title = element_text(hjust = 0.5), plot.subtitle = element_text(hjust = 0.5))
+
+BothAlbums <- RedWords %>%
+  full_join(SpeakNowWords) 
+
+RedProp <- Swift %>%
+  filter(Album == "Red") %>%
+  filter(!word %in% stop_words$word) %>%
+  inner_join(word_sentiments, by = "word") %>%
+  group_by(sentiment) %>%
+  summarise(N = n()) %>%
+  mutate(Album = "Red")
+
+SpeakNowProp <- Swift %>%
+  filter(Album == "Speak Now") %>%
+  filter(!word %in% stop_words$word) %>%
+  inner_join(word_sentiments, by = "word") %>%
+  group_by(sentiment) %>%
+  summarise(N = n()) %>%
+  mutate(Album = "Speak Now")
+
+FullProp <- RedProp %>%
+  full_join(SpeakNowProp) %>%
+  group_by(Album) %>%
+  mutate(Prop = N/sum(N))
+
+Summary <- ggplot(FilterSwift) +
+  geom_col(aes(x = Album, y = Prop, fill = sentiment)) +
+  scale_fill_manual(values = c("positive" = "green3", "negative" = "red2")) +
+  coord_cartesian(expand=T) +
+  scale_y_continuous(breaks = c(0, 0.25, 0.5, 0.75, 1), 
+                     labels = c("0%", "25%", "50%", "75%", "100%"), 
+                     limits = c(0, 1)) +
+  annotate("text", x = 1, y = 0.7, label = "Negative\nWords", fontface = "bold") +
+  annotate("text", x = 2, y = 0.2, label = "Positive\nWords", fontface = "bold") +
+  labs(title = "Percentage of Positive and Negative Words", 
+       subtitle = '"Red" and "Speak Now"', y = "", x="") +
+  theme_minimal() +
+  theme(legend.position = "none", plot.title = element_text(hjust = 0.5), 
+        plot.subtitle = element_text(hjust = 0.5))
+
+
+SpeakNowEnergy <- ggplot(FinalMusicData %>% filter(Album == "Speak Now")) +
+  geom_point(aes(x = PositiveProp, y = Energy), color = "blue") +
+  scale_x_continuous(breaks = c(0, 0.25, 0.5, 0.75, 1), 
+                     labels = c("0%", "25%", "50%", "75%", "100%"), 
+                     limits = c(0, 1)) +
+  scale_y_continuous(breaks = c(0, 0.25, 0.5, 0.75, 1), 
+                     labels = c("0%", "25%", "50%", "75%", "100%"), 
+                     limits = c(0, 1)) +
+  theme_minimal() +
+  labs(x = "Percentage of Positive Lyrics", y = "Energy Percentage", 
+       title = "Positive Sentiment vs Energy", subtitle = "Each Song in Speak Now") +
+  theme(plot.title = element_text(hjust = 0.5), plot.subtitle = element_text(hjust = 0.5))
+
+RedEnergy <- ggplot(FinalMusicData %>% filter(Album == "Red")) +
+  geom_point(aes(x = PositiveProp, y = Energy), color = "red4") +
+  scale_x_continuous(breaks = c(0, 0.25, 0.5, 0.75, 1), 
+                     labels = c("0%", "25%", "50%", "75%", "100%"), 
+                     limits = c(0, 1)) +
+  scale_y_continuous(breaks = c(0, 0.25, 0.5, 0.75, 1), 
+                     labels = c("0%", "25%", "50%", "75%", "100%"), 
+                     limits = c(0, 1)) +
+  theme_minimal() +
+  labs(x = "Percentage of Positive Lyrics", y = "Energy Percentage", 
+       title = "Positive Sentiment vs Energy", subtitle = "Each Song in Red") +
+  theme(plot.title = element_text(hjust = 0.5), plot.subtitle = element_text(hjust = 0.5))
+
+my_dashboard <- (RedCloud + Summary + SpeakNowCloud) / (RedDance + SpeakNowDance) / (RedEnergy + SpeakNowEnergy) +
+  plot_annotation(
+    title = "Sentiment Analysis of Taylor Swift Albums",
+    subtitle = "Red and Speak Now",
+    caption = "It appears that Taylor Swift maintains the same level of danceability and energy for each album, and it does not depend on the percentage of positive lyrics in a song. 
+'Red' has more extremes on percentage of positive lyrics within different songs, whereas 'Speak Now' tends to have the same range of positive lyrics for each song.",
+    theme = theme(
+      plot.title = element_text(hjust = 0.5, size = 20, face = "bold"), 
+      plot.subtitle = element_text(hjust = 0.5, size = 16),               
+      plot.caption = element_text(hjust = 0.5, size = 8, vjust = 239)
+    )
+  )
+
+
+ggsave(plot=my_dashboard, filename="TaylorSwiftSentiment.png",
+       width = 16, height = 9, dpi=300)
+
+##############################################################################
+
+Production <- read_csv("https://raw.githubusercontent.com/oconnellmj/sta309/main/milk-production-tonnes.csv")
+Consumption <- read_csv("https://raw.githubusercontent.com/oconnellmj/sta309/main/per-capita-milk-consumption.csv")
+
+SplitMilkData <- MilkData %>%
+  mutate(Production = `Milk Production (tonnes)`/100000, Consumption = `Milk consumption (kilograms per year per capita)`)
+
+ggplot(MilkData) +
+  geom_point(aes(x = Year, y = `Milk Production (tonnes)`))
+
+ProductionOverTime <- ggplot(SplitMilkData, aes(x = Year, y = Production)) +
+  geom_point(size = 1, color = "gray") +          
+  geom_line(aes(group = region), alpha = .5, color="gray40") +
+  geom_line(data = subset(SplitMilkData, region == "Brazil"), size = 1.2, color = "black") +
+  geom_point(data = subset(SplitMilkData, region == "Brazil"), size = 2.5,
+             color = "black") +
+  labs(title = "Milk Production Over Time Per Country", 
+       y = "Production, in Millions of Tons") +
+  theme_minimal() +
+  geom_text(aes(x=2013, y=225, label="Brazil is the only country to see a consistent increase in production,
+likely due to a combination of favorable conditions, 
+economic strategy, and government support, according to the USDA.", hjust = 0.5, vjust = 0.5), color = 'black', size = 2.75) +
+  theme(plot.title = element_text(hjust = 0.5))
+
+
+ConsumptionOverTime <- ggplot(SplitMilkData, aes(x = Year, y = Consumption)) +
+  geom_point(size = 1, color = "gray") +          
+  geom_line(aes(group = region), alpha = .5, color="gray40") +
+  geom_line(data = subset(SplitMilkData, region == "Guyana"), size = 1.2, color = "black") +
+  geom_point(data = subset(SplitMilkData, region == "Guyana"), size = 2.5,
+             color = "black") +
+  labs(title = "Milk Consumption Over Time Per Country", 
+       y = "Consumption, in kilograms per year per capita") +
+  theme_minimal() +
+  geom_text(aes(x=2016, y=265, label="Guyana's milk consumption in 2010 cannot be 
+explained with surface level research,
+but it is certainly inflating the average 
+milk consumption over time, making it the 
+third highest country in the region,
+according to the graph above."), hjust = 0.5, vjust = 0.5, color = 'black', size = 3) +
+  theme(plot.title = element_text(hjust = 0.5))
+
+ConsumptionVSProduction <- ggplot(averages, aes(x = MeanConsumption, y = MeanProduction)) +
+  geom_point(size = 2.5, color = "black") +          
+  geom_line(aes(group = region), alpha = .5, color="black") +
+  geom_smooth(method = "lm", color = "red", se = F) +
+  geom_text(aes(x=115, y=275, label="Brazil is greatly influencing the trend line to make it appear that there is a correlation.
+However, there is only a very insignificant positive correlation 
+among these variables in the other countries."), color = 'black', size = 3) +
+  labs(title = "Average Production vs Consumption of Milk",
+       x = "Mean Consumption, in kilograms per year per capital", y = "Production, in Millions of Tons") +
+  theme_minimal() +
+  theme(plot.title = element_text(hjust = 0.5))
+
+
+mydashboard <- (
+  (ProductionMap | ConsumptionMap) /
+    (ProductionOverTime | ConsumptionVSProduction | ConsumptionOverTime)
+) +
+  plot_annotation(
+    title = "Analysis of Milk Production and Consumption Among South American Countries",
+    subtitle = "2000-2021",
+    theme = theme(
+      plot.title = element_text(hjust = 0.5, size = 20, face = "bold"), 
+      plot.subtitle = element_text(hjust = 0.5, size = 16)               
+    )
+  ) +
+  plot_layout(
+    widths = c(3, 2),      # Spread out top row columns (ProductionMap, ConsumptionMap)
+    heights = c(1, 0.9)  # Adjust heights of rows
+  )
+
+ggsave(plot=mydashboard, filename="SouthAmericaMilk.png",
+       width = 20, height = 10, dpi=300)
