@@ -1,6 +1,14 @@
 ## Final Midterm 2 Code 
 ## Jaxson Bugg
 
+library(tidyverse)
+library(mplot)
+library(ggthemes)
+library(patchwork)
+library(caret)
+library(tidytext)
+library(ggwordcloud)
+
 ## Problem 1
 
 Production <- read_csv("https://raw.githubusercontent.com/oconnellmj/sta309/main/milk-production-tonnes.csv")
