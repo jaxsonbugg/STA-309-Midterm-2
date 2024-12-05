@@ -147,7 +147,7 @@ mydashboard <- (
     heights = c(1, 0.7)  
   )
 
-ggsave(plot=mydashboard, filename="SouthAmericaMilkStuff.png",
+ggsave(plot=mydashboard, filename="SouthAmericaMilk.png",
        width = 20, height = 10, dpi=300)
 
 ## Problem 2
