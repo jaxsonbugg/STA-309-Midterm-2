@@ -1,4 +1,148 @@
-#################################################################################
+## Final Midterm 2 Code 
+## Jaxson Bugg
+
+## Problem 1
+
+Production <- read_csv("https://raw.githubusercontent.com/oconnellmj/sta309/main/milk-production-tonnes.csv")
+Consumption <- read_csv("https://raw.githubusercontent.com/oconnellmj/sta309/main/per-capita-milk-consumption.csv")
+
+Production <- Production %>%
+  select(-Code) %>%
+  filter(Entity %in% c("Argentina", "Bolivia", "Brazil", "Chile", "Colombia", "Ecuador", "Guyana", "Paraguay", "Peru", "Suriname", "Uruguay", "Venezuela"))
+
+Consumption <- Consumption %>%
+  select(-Code) %>%
+  filter(Entity %in% c("Argentina", "Bolivia", "Brazil", "Chile", "Colombia", "Ecuador", "Guyana", "Paraguay", "Peru", "Suriname", "Uruguay", "Venezuela"))
+
+MilkDataOnly <- Consumption %>%
+  right_join(Production, by = c("Entity", "Year")) %>%
+  na.omit() %>%
+  mutate(region = Entity, 
+         Production = `Milk Production (tonnes)`/100000, 
+         Consumption = `Milk consumption (kilograms per year per capita)`) %>%
+  select(5, 2, 6, 7) %>%
+  filter(Year %in% c(2000:2021))
+
+world_map <- map_data("world") 
+
+SouthAmerica <- world_map %>%
+  filter(region %in% c("Argentina", "Bolivia", "Brazil", "Chile", "Colombia", "Ecuador", "Guyana", "Paraguay", "Peru", "Suriname", "Uruguay", "Venezuela")) %>%
+  filter(!(subregion %in% c("Easter Island", "Isla Fernandina", "Isla Isabela", "Isla San Salvador", "Isla Santa Cruz", "Isla Santa Maria", "Isla San Cristobal")))
+
+ProductionOverTime <- ggplot(MilkDataOnly, aes(x = Year, y = Production)) +
+  geom_point(size = 1, color = "gray") +          
+  geom_line(aes(group = region), alpha = .5, color="gray40") +
+  geom_line(data = subset(MilkDataOnly, region == "Brazil"), size = 1.2, color = "black") +
+  geom_point(data = subset(MilkDataOnly, region == "Brazil"), size = 2.5,
+             color = "black") +
+  labs(title = "Milk Production Over Time Per Country", 
+       y = "Production, in Millions of Tons") +
+  theme_minimal() +
+  geom_text(aes(x=2015, y=250, label="Brazil is the only country to see a consistent increase in production,
+likely due to a combination of favorable conditions, 
+economic strategy, and government support, according to the USDA.", hjust = 0.5, vjust = 0.5), color = 'black', size = 2.75) +
+  theme(plot.title = element_text(hjust = 0.5)) 
+
+ConsumptionOverTime <- ggplot(MilkDataOnly, aes(x = Year, y = Consumption)) +
+  geom_point(size = 1, color = "gray") +          
+  geom_line(aes(group = region), alpha = .5, color="gray40") +
+  geom_line(data = subset(MilkDataOnly, region == "Guyana"), size = 1.2, color = "black") +
+  geom_point(data = subset(MilkDataOnly, region == "Guyana"), size = 2.5,
+             color = "black") +
+  labs(title = "Milk Consumption Over Time Per Country", 
+       y = "Consumption, in kilograms per year per capita") +
+  theme_minimal() +
+  geom_text(aes(x=2015.45, y=260, label="Guyana's milk consumption in 2010 cannot be 
+explained with surface level research, 
+but it is certainly inflating the average 
+milk consumption over time, 
+making it the third highest country in the region,
+according to the graph above."), hjust = 0.5, vjust = 0.5, color = 'black', size = 3) +
+  theme(plot.title = element_text(hjust = 0.5)) +
+  geom_text(x = 2010, y = 350, label = "")
+
+averages <- MilkDataOnly %>%
+  group_by(region) %>%
+  summarise(
+    MeanConsumption = mean(Consumption, na.rm = TRUE), 
+    MeanProduction = mean(Production, na.rm = TRUE)
+  )
+
+ConsumptionVSProduction <- ggplot(averages, aes(x = MeanConsumption, y = MeanProduction)) +
+  geom_point(size = 2.5, color = "black") +          
+  geom_line(aes(group = region), alpha = .5, color="black") +
+  geom_smooth(method = "lm", color = "red", se = F) +
+  geom_text(aes(x=130, y=270, label="Brazil is greatly influencing the trend line to make it appear that there is a correlation.
+However, there is only a very insignificant positive correlation 
+among these variables in the other countries."), color = 'black', size = 3) +
+  labs(title = "Average Production vs Consumption of Milk",
+       x = "Mean Consumption, in kilograms per year per capital", y = "Production, in Millions of Tons") +
+  theme_minimal() +
+  theme(plot.title = element_text(hjust = 0.5)) +
+  geom_text(aes(x = 200, y = 200, label = ""))
+
+world_map <- map_data("world") 
+
+SouthAmerica <- world_map %>%
+  filter(region %in% c("Argentina", "Bolivia", "Brazil", "Chile", "Colombia", "Ecuador", "Guyana", "Paraguay", "Peru", "Suriname", "Uruguay", "Venezuela")) %>%
+  filter(!(subregion %in% c("Easter Island", "Isla Fernandina", "Isla Isabela", "Isla San Salvador", "Isla Santa Cruz", "Isla Santa Maria", "Isla San Cristobal")))
+
+MapData <- averages %>%
+  right_join(SouthAmerica, by=c("region"))
+
+ProductionMap <- ggplot(MapData, aes(x=long, y=lat, group=group) ) +
+  geom_polygon(aes(fill=MeanProduction), color="gray30") + 
+  coord_map() +
+  theme_map() +
+  theme(legend.position = "bottom") +
+  scale_fill_gradient2(low="red3", high="green4",
+                       midpoint = 152.5, limits=c(0,305), name = "Millions of Tons") +
+  annotate("text", x = -52, y = -10, label = "Brazil", size = 5) +
+  annotate("text", x = -64, y = -30, label = "Argentina", size = 3) +
+  annotate("text", x = -45, y = 8, label = "Suriname", size = 3) +
+  annotate("text", x = -52, y = 12, label = "Guyana", size = 3) +
+  annotate("segment", x = -51.5, y = 7, xend = -55, yend = 5, color = "black", size = 1) +
+  annotate("segment", x = -56.5, y = 10.5, xend = -59, yend = 6, color = "black", size = 1) +
+  labs(title = "Average Milk Production by Country", subtitle = "Two largest and smallest highlighted") +
+  theme(plot.title = element_text(hjust = 0.5), plot.subtitle = element_text(hjust = 0.5))
+
+ConsumptionMap <- ggplot(MapData, aes(x=long, y=lat, group=group) ) +
+  geom_polygon(aes(fill=MeanConsumption), color="gray30") + 
+  coord_map() +
+  theme_map() +
+  theme(legend.position = "bottom") +
+  scale_fill_gradient2(low="red3", high="green4",
+                       midpoint = 116.5, limits=c(38,195), name = "KGs Per Capita") +
+  annotate("text", x = -64, y = -30, label = "Argentina", size = 3) +
+  annotate("text", x = -45, y = 8, label = "Suriname", size = 3) +
+  annotate("segment", x = -51.5, y = 7, xend = -55, yend = 5, color = "black", size = 1) +
+  annotate("text", x = -64.3, y = -16.2, label = "Bolivia", size = 3) +
+  annotate("text", x = -50, y = -38.5, label = "Uruguay", size = 3) +
+  annotate("segment", x = -52, y = -37.5, xend = -55, yend = -34, color = "black", size = 1) +
+  labs(title = "Average Milk Consumption by Country", subtitle = "Two largest and smallest highlighted") +
+  theme(plot.title = element_text(hjust = 0.5), plot.subtitle = element_text(hjust = 0.5))
+
+mydashboard <- (
+  (ProductionMap | ConsumptionMap) /
+    (ProductionOverTime | ConsumptionVSProduction | ConsumptionOverTime)
+) +
+  plot_annotation(
+    title = "Analysis of Milk Production and Consumption Among South American Countries",
+    subtitle = "2000-2021",
+    theme = theme(
+      plot.title = element_text(hjust = 0.5, size = 20, face = "bold"), 
+      plot.subtitle = element_text(hjust = 0.5, size = 16)               
+    )
+  ) +
+  plot_layout(
+    widths = c(3, 2),      
+    heights = c(1, 0.7)  
+  )
+
+ggsave(plot=mydashboard, filename="SouthAmericaMilkStuff.png",
+       width = 20, height = 10, dpi=300)
+
+## Problem 2
 
 Swift <- read_csv("taylor_swift_genius_data.csv")
 MusicData <- read_csv("taylor_swift_spotify_data.csv")
@@ -68,7 +212,6 @@ RedCloud <- ggplot(RedWords, aes(label = word, size = N, color = sentiment)) +
   theme_minimal() +
   labs(title = "Red") +
   theme(plot.title = element_text(hjust = 0.5))
-
 
 FinalMusicData <- MusicData %>%
   full_join(PositiveProp) %>%
@@ -184,82 +327,5 @@ my_dashboard <- (RedCloud + Summary + SpeakNowCloud) / (RedDance + SpeakNowDance
     )
   )
 
-
 ggsave(plot=my_dashboard, filename="TaylorSwiftSentiment.png",
        width = 16, height = 9, dpi=300)
-
-##############################################################################
-
-Production <- read_csv("https://raw.githubusercontent.com/oconnellmj/sta309/main/milk-production-tonnes.csv")
-Consumption <- read_csv("https://raw.githubusercontent.com/oconnellmj/sta309/main/per-capita-milk-consumption.csv")
-
-SplitMilkData <- MilkData %>%
-  mutate(Production = `Milk Production (tonnes)`/100000, Consumption = `Milk consumption (kilograms per year per capita)`)
-
-ggplot(MilkData) +
-  geom_point(aes(x = Year, y = `Milk Production (tonnes)`))
-
-ProductionOverTime <- ggplot(SplitMilkData, aes(x = Year, y = Production)) +
-  geom_point(size = 1, color = "gray") +          
-  geom_line(aes(group = region), alpha = .5, color="gray40") +
-  geom_line(data = subset(SplitMilkData, region == "Brazil"), size = 1.2, color = "black") +
-  geom_point(data = subset(SplitMilkData, region == "Brazil"), size = 2.5,
-             color = "black") +
-  labs(title = "Milk Production Over Time Per Country", 
-       y = "Production, in Millions of Tons") +
-  theme_minimal() +
-  geom_text(aes(x=2013, y=225, label="Brazil is the only country to see a consistent increase in production,
-likely due to a combination of favorable conditions, 
-economic strategy, and government support, according to the USDA.", hjust = 0.5, vjust = 0.5), color = 'black', size = 2.75) +
-  theme(plot.title = element_text(hjust = 0.5))
-
-
-ConsumptionOverTime <- ggplot(SplitMilkData, aes(x = Year, y = Consumption)) +
-  geom_point(size = 1, color = "gray") +          
-  geom_line(aes(group = region), alpha = .5, color="gray40") +
-  geom_line(data = subset(SplitMilkData, region == "Guyana"), size = 1.2, color = "black") +
-  geom_point(data = subset(SplitMilkData, region == "Guyana"), size = 2.5,
-             color = "black") +
-  labs(title = "Milk Consumption Over Time Per Country", 
-       y = "Consumption, in kilograms per year per capita") +
-  theme_minimal() +
-  geom_text(aes(x=2016, y=265, label="Guyana's milk consumption in 2010 cannot be 
-explained with surface level research,
-but it is certainly inflating the average 
-milk consumption over time, making it the 
-third highest country in the region,
-according to the graph above."), hjust = 0.5, vjust = 0.5, color = 'black', size = 3) +
-  theme(plot.title = element_text(hjust = 0.5))
-
-ConsumptionVSProduction <- ggplot(averages, aes(x = MeanConsumption, y = MeanProduction)) +
-  geom_point(size = 2.5, color = "black") +          
-  geom_line(aes(group = region), alpha = .5, color="black") +
-  geom_smooth(method = "lm", color = "red", se = F) +
-  geom_text(aes(x=115, y=275, label="Brazil is greatly influencing the trend line to make it appear that there is a correlation.
-However, there is only a very insignificant positive correlation 
-among these variables in the other countries."), color = 'black', size = 3) +
-  labs(title = "Average Production vs Consumption of Milk",
-       x = "Mean Consumption, in kilograms per year per capital", y = "Production, in Millions of Tons") +
-  theme_minimal() +
-  theme(plot.title = element_text(hjust = 0.5))
-
-
-mydashboard <- (
-  (ProductionMap | ConsumptionMap) /
-    (ProductionOverTime | ConsumptionVSProduction | ConsumptionOverTime)
-) +
-  plot_annotation(
-    title = "Analysis of Milk Production and Consumption Among South American Countries",
-    subtitle = "2000-2021",
-    theme = theme(
-      plot.title = element_text(hjust = 0.5, size = 20, face = "bold"), 
-      plot.subtitle = element_text(hjust = 0.5, size = 16)               
-    )
-  ) +
-  plot_layout(
-    widths = c(3, 2),      # Spread out top row columns (ProductionMap, ConsumptionMap)
-    heights = c(1, 0.9)  # Adjust heights of rows
-  )
-
-ggsave(plot=mydashboard, filename="SouthAmericaMilk.png",
-       width = 20, height = 10, dpi=300)
